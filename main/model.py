@@ -53,7 +53,7 @@ def linearreg(train,k):
 
 
 
-def xgb(train,k):
+def xgb(train,num_round):
     print('>> The XGBoosting Model Selected ....................................\n')
     train = train.reset_index()
     fea = train.columns.drop(['index','Open', 'Sales', 'PromoInterval', 'Date'])
@@ -66,7 +66,7 @@ def xgb(train,k):
              'objective': 'reg:linear',
              'colsample_bytree': 0.7,
              'subsample': 0.7}
-    num_round = 150
+    num_round = 2000
     X_train,X_val, y_train, y_val = train_test_split(train_fea,train_y,test_size= 0.2,random_state=SEED)
     dtrain = xgb.DMatrix(X_train, label=np.log(y_train))
     dtest = xgb.DMatrix(X_val)
@@ -95,25 +95,23 @@ def lightgb_model(train,num_round):
     train_fea = train_fea.fillna(0)
     train_y = train.Sales
 
-    param = {
-        'boosting_type': 'gbdt',
-        'objective': 'regression',
-        'metric': {'l2', 'l1'},
-        'num_leaves': 31,
-        'learning_rate': 0.3,
-        'feature_fraction': 1,
-        'bagging_fraction': 1,
-        'bagging_freq': 1,
-        'verbose': 1
-    }
+    param = {'nthread': -1,
+             'max_depth': 7,
+             'eta': 0.02,
+             'silent': 1,
+             'objective': 'regression',
+             'colsample_bytree': 0.7,
+             'subsample': 0.7}
+
+
     X_train, X_val, y_train, y_val = train_test_split(train_fea, train_y, test_size=0.2, random_state=SEED)
     dtrain = lgb.Dataset(X_train, label=np.log(y_train))
     dtest = lgb.Dataset(X_val)
     evallist = [(dtrain, 'train')]
-    lgb_model = lgb.train(param, dtrain, num_round, evallist)
-    train_pred = lgb_model.predict(dtrain)
-    test_pred = lgb_model.predict(dtest)
-    train_error, train_rmsepe, val_error, val_rmsepe = err_metric(train_fea, y_train, test_pred, y_val)
+    lgb_model = lgb.train(param, dtrain, num_round)
+    train_pred = lgb_model.predict(X_train)
+    test_pred = lgb_model.predict(X_val)
+    train_error, train_rmsepe, val_error, val_rmsepe = err_metric(train_pred, np.log(y_train), test_pred, np.log(y_val))
 
         # generate report
     print('mean(train_error): {0} |RMSEPE(train): {1} |mean(val_error): {2}|RMSEPE(val): {3}'.
