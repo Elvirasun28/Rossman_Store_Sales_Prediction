@@ -8,22 +8,23 @@ from statsmodels.graphics.tsaplots import plot_pacf
 from pyramid.arima import auto_arima
 import fbprophet
 from dateutil.relativedelta import relativedelta
+from statsmodels.tsa.arima_model import ARIMA
 
 def checkStat(data):
     # Determine rolling statistics
-    rolmean = data.Customers.rolling(window=7).mean()
-    rolstd = data.Customers.rolling(window=7).std()
+    rolmean = data.Customers.rolling(window=6).mean()
+    rolstd = data.Customers.rolling(window=6).std()
 
     # Plot rolling statistics: (also first 100 values)
-    '''
+    c = list(data.Customers.values[7:])
     plt.figure(figsize=(12,6))
-    orig = plt.plot(data.Customers.values, color='blue', label='Original')
-    mean = plt.plot(rolmean, color='red', label='Rolling Mean')
-    std = plt.plot(rolstd, color='black', label='Rolling Std')
+    orig = plt.plot(c, color='blue', label='Original')
+    mean = plt.plot(rolmean[7:].astype('int'), color='red', label='Rolling Mean')
+    std = plt.plot(rolstd[7:].astype('int'), color='black', label='Rolling Std')
     plt.legend(loc='best')
     plt.title('Rolling Mean & Standard Deviation')
     plt.show(block=False)
-    '''
+
     # Perform Dickey-Fuller test:
     ## p-value < 0.05, which means that it is stationary
     print('Results of Dickey-Fuller Test:')
@@ -37,16 +38,14 @@ def checkStat(data):
 def timePred(data, period):
     ## check the stationary or not
     data_sorted = data.sort_index()
+    # checkStat(data_sorted_1)
     data_sorted.index = [datetime.strptime(d, '%Y-%m-%d').date() for d in data_sorted.index]
-    #checkStat(data)
-
     ## pred the future data
-    stepwise_model = auto_arima(data_sorted.Customers, start_p=1, start_q=1,
-                                max_p=3, max_q=3,start_P=0, m = 7,seasonal=True,
+    stepwise_model = auto_arima(data_sorted.Customers, start_p=0, start_q=1,
+                                max_p=0, max_q=3,start_P=0,seasonal=True,
                                 d=1, D=1, trace=True, error_action='ignore',
                                 suppress_warnings=True,stepwise=True)
     print('The AIC for the optimal ARIMA model: ', stepwise_model.aic())
-
     ## predict the customer values in test_set
 
     stepwise_model.fit(data_sorted.Customers)
@@ -59,11 +58,11 @@ def testCustPred(train,test):
     train_data = pd.DataFrame(train[['Store','Customers']].values, index=train.Date.values)
     train_data.columns = ['Store','Customers']
     testD =test.Date.values[:41]
-    cust = pd.DataFrame(columns=['Store','Customers'],index=testD)
+    cust = pd.DataFrame(columns=['Store','Customers'])
     for st in set(test.Store):
         print('Predict Customer Amount For store {}\n'.format(st))
         train_data_store = train_data[train_data.Store == st]
-        custMax = pd.DataFrame(timePred(train_data_store,len(testD))[::-1],columns=['Customers'],index=testD)
+        custMax = pd.DataFrame(timePred(train_data_store,len(testD)),columns=['Customers'],index=testD)
         custMax['Store'] = [st] * custMax.shape[0]
         cust = pd.concat([cust,custMax],sort=False)
 
@@ -73,6 +72,10 @@ def testCustPred(train,test):
     test = pd.merge(test, cust, on='Store')
     test.to_csv('data/test_customer_adjusted.csv')
     return test
+
+
+
+
 
 
 def lastMonthCustoemr(train,test):
